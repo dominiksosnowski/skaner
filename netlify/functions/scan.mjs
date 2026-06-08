@@ -20,7 +20,7 @@ const CONFIG = {
   supabaseKey:    process.env.SUPABASE_SERVICE_KEY,
 };
 
-const BYBIT = "https://api.bybit.com";
+const BYBIT = "https://api.bytick.com";
 
 // ─── Bybit helpers ───────────────────────────────────────────
 
