@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#8b5cf6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>DivScanner</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+  :root {
+    --bg:      #0f0f13;
+    --surface: #141420;
+    --border:  #1e293b;
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+    --green:   #22c55e;
+    --red:     #ef4444;
+    --yellow:  #eab308;
+    --cyan:    #06b6d4;
+    --purple:  #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+
+  /* ── Header ── */
+  header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .logo span { color: var(--purple); }
+  .header-actions { display: flex; gap: 8px; }
+  .btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; cursor: pointer; transition: border-color .15s; white-space: nowrap; }
+  .btn:hover { border-color: var(--purple); }
+  .btn.active { border-color: var(--purple); background: #1e1a36; color: var(--purple); }
+
+  /* ── Stats bar ── */
+  .stats { display: flex; gap: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .stat { flex: 1; min-width: 80px; padding: 10px 14px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .stat-value { font-size: 16px; font-weight: 700; }
+
+  /* ── Filters ── */
+  .filters { padding: 10px 16px; display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); }
+  .filter-btn { flex-shrink: 0; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; transition: all .15s; }
+  .filter-btn.active { color: var(--text); border-color: var(--text); background: var(--surface); }
+  .filter-btn.f-cross_up.active    { border-color: var(--green);  color: var(--green); }
+  .filter-btn.f-cross_down.active  { border-color: var(--red);    color: var(--red); }
+  .filter-btn.f-bull_fading.active { border-color: var(--yellow); color: var(--yellow); }
+  .filter-btn.f-bear_fading.active { border-color: var(--cyan);   color: var(--cyan); }
+
+  /* ── Signal cards ── */
+  .signals { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .signal { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); border-left-width: 3px; animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  .signal.cross_up    { border-left-color: var(--green); }
+  .signal.cross_down  { border-left-color: var(--red); }
+  .signal.bull_fading { border-left-color: var(--yellow); }
+  .signal.bear_fading { border-left-color: var(--cyan); }
+
+  .sig-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .sym { font-size: 15px; font-weight: 700; }
+  .sig-badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .cross_up    .sig-badge { background: #14532d; color: #86efac; }
+  .cross_down  .sig-badge { background: #7f1d1d; color: #fca5a5; }
+  .bull_fading .sig-badge { background: #422006; color: #fde68a; }
+  .bear_fading .sig-badge { background: #0c4a6e; color: #7dd3fc; }
+
+  .sig-values { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .sig-values code { color: var(--text); font-family: 'SF Mono', monospace; }
+  .sig-time { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Empty ── */
+  .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+  /* ── Notification banner ── */
+  .notif-banner { margin: 12px 16px 0; padding: 10px 14px; border-radius: 8px; background: #1e1a36; border: 1px solid var(--purple); font-size: 12px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .notif-banner.hidden { display: none; }
+  .notif-banner button { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--purple); background: transparent; color: var(--purple); font-size: 12px; cursor: pointer; flex-shrink: 0; }
+
+  /* ── Loading ── */
+  .loading { padding: 40px; text-align: center; color: var(--muted); }
+  .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--purple); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Connection dot ── */
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 4px; }
+  .conn-dot.live { background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡ <span>Div</span>Scanner</div>
+  <div class="header-actions">
+    <button class="btn" id="notifBtn" onclick="toggleNotifications()">🔔 Powiadomienia</button>
+    <button class="btn" id="refreshBtn" onclick="loadSignals()">↻</button>
+  </div>
+</header>
+
+<div class="notif-banner hidden" id="notifBanner">
+  <span>Włącz powiadomienia push żeby dostać alert przy nowym sygnale</span>
+  <button onclick="requestNotifications()">Włącz</button>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-label">Sygnały</div>
+    <div class="stat-value" id="s-total">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Ostatni</div>
+    <div class="stat-value" id="s-last" style="font-size:12px;margin-top:3px">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Status</div>
+    <div class="stat-value" style="font-size:13px"><span class="conn-dot" id="connDot"></span><span id="connStatus">—</span></div>
+  </div>
+</div>
+
+<div class="filters">
+  <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">Wszystkie</button>
+  <button class="filter-btn f-cross_up" data-filter="cross_up" onclick="setFilter('cross_up', this)">🟢 Crossover ▲</button>
+  <button class="filter-btn f-cross_down" data-filter="cross_down" onclick="setFilter('cross_down', this)">🔴 Crossover ▼</button>
+  <button class="filter-btn f-bull_fading" data-filter="bull_fading" onclick="setFilter('bull_fading', this)">🟡 Zanik byczej</button>
+  <button class="filter-btn f-bear_fading" data-filter="bear_fading" onclick="setFilter('bear_fading', this)">🔵 Zanik niedźwiedziej</button>
+</div>
+
+<div id="app">
+  <div class="loading"><div class="spinner"></div>Ładowanie sygnałów...</div>
+</div>
+
+<script>
+// ─── Konfiguracja ─────────────────────────────────────────────
+// ZMIEŃ te dwie wartości na swoje dane z Supabase
+const SUPABASE_URL  = "https://zboawtxivkcieimbndhd.supabase.co/rest/v1/";       // np. https://xyz.supabase.co
+const SUPABASE_ANON = "sb_publishable_u9zajjGvLqkuNZptl90zEA_dkgu8Ll4";  // anon/public key
+
+const LABELS = {
+  cross_up:    "CROSSOVER ▲",
+  cross_down:  "CROSSOVER ▼",
+  bull_fading: "ZANIK BYCZEJ",
+  bear_fading: "ZANIK NIEDŹWIEDZIEJ",
+};
+
+// ─── Stan ─────────────────────────────────────────────────────
+let signals    = [];
+let filter     = "all";
+let supabase   = null;
+let realtimeSub = null;
+
+// ─── Init ─────────────────────────────────────────────────────
+async function init() {
+  registerSW();
+  checkNotifBanner();
+  await loadSignals();
+  subscribeRealtime();
+}
+
+// ─── Service Worker ───────────────────────────────────────────
+function registerSW() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(console.error);
+  }
+}
+
+// ─── Supabase REST ────────────────────────────────────────────
+async function fetchSignals(limit = 100) {
+  const url = `${SUPABASE_URL}/rest/v1/signals?order=created_at.desc&limit=${limit}`;
+  const res = await fetch(url, {
+    headers: {
+      "apikey":        SUPABASE_ANON,
+      "Authorization": `Bearer ${SUPABASE_ANON}`,
+    },
+  });
+  if (!res.ok) throw new Error(`Supabase error ${res.status}`);
+  return res.json();
+}
+
+async function loadSignals() {
+  document.getElementById("refreshBtn").textContent = "⟳";
+  try {
+    signals = await fetchSignals();
+    updateStats();
+    render();
+    setConnected(true);
+  } catch (e) {
+    console.error(e);
+    setConnected(false);
+    document.getElementById("app").innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div>Błąd połączenia z Supabase.<br>Sprawdź klucze w index.html.</div>`;
+  }
+  document.getElementById("refreshBtn").textContent = "↻";
+}
+
+// ─── Realtime (Supabase WebSocket) ────────────────────────────
+function subscribeRealtime() {
+  // Używamy natywnego EventSource przez Supabase Realtime REST
+  // Prosta implementacja przez polling co 60s jako fallback
+  setInterval(loadSignals, 60_000);
+
+  // Supabase Realtime przez WebSocket
+  try {
+    const wsUrl = SUPABASE_URL
+      .replace("https://", "wss://")
+      .replace("http://", "ws://");
+    const ws = new WebSocket(
+      `${wsUrl}/realtime/v1/websocket?apikey=${SUPABASE_ANON}&vsn=1.0.0`
+    );
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        topic: "realtime:public:signals",
+        event: "phx_join",
+        payload: {},
+        ref: "1",
+      }));
+      setConnected(true);
+    };
+
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if (msg.event === "INSERT" && msg.payload?.record) {
+        const rec = msg.payload.record;
+        signals = [rec, ...signals].slice(0, 100);
+        updateStats();
+        render();
+        showBrowserNotif(rec);
+      }
+    };
+
+    ws.onerror = () => setConnected(false);
+    ws.onclose = () => {
+      setConnected(false);
+      setTimeout(subscribeRealtime, 5000); // reconnect
+    };
+  } catch (e) {
+    console.warn("Realtime WS failed, using polling");
+  }
+}
+
+// ─── Render ───────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById("app");
+  const filtered = filter === "all" ? signals : signals.filter(s => s.type === filter);
+
+  if (!filtered.length) {
+    app.innerHTML = `<div class="empty"><div class="empty-icon">📡</div>
+      ${filter === "all" ? "Brak sygnałów. Następny skan za ~1h." : "Brak sygnałów tego typu."}</div>`;
+    return;
+  }
+
+  app.innerHTML = `<div class="signals">${filtered.map(renderSignal).join("")}</div>`;
+}
+
+function renderSignal(s) {
+  const label = LABELS[s.type] || s.type;
+  const t = new Date(s.created_at);
+  const timeStr = t.toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return `
+    <div class="signal ${s.type}">
+      <div class="sig-top">
+        <span class="sym">${s.symbol}</span>
+        <span class="sig-badge">${label}</span>
+      </div>
+      <div class="sig-values">
+        <span>alt%: <code>${fmt(s.alt_chg)}%</code></span>
+        <span>btc%: <code>${fmt(s.btc_chg)}%</code></span>
+        <span>rel: <code>${fmt(s.rel)}</code></span>
+        <span>decay: <code>${fmt(s.decay)}</code></span>
+      </div>
+      <div class="sig-time">${timeStr}</div>
+    </div>`;
+}
+
+function fmt(v) {
+  if (v == null) return "—";
+  return (v >= 0 ? "+" : "") + Number(v).toFixed(2);
+}
+
+// ─── Stats ────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById("s-total").textContent = signals.length;
+  if (signals.length) {
+    const t = new Date(signals[0].created_at);
+    document.getElementById("s-last").textContent =
+      t.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  }
+}
+
+function setConnected(ok) {
+  document.getElementById("connDot").className = "conn-dot" + (ok ? " live" : "");
+  document.getElementById("connStatus").textContent = ok ? "Live" : "Offline";
+}
+
+// ─── Filter ───────────────────────────────────────────────────
+function setFilter(f, el) {
+  filter = f;
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  render();
+}
+
+// ─── Powiadomienia ────────────────────────────────────────────
+function checkNotifBanner() {
+  if ("Notification" in window && Notification.permission === "default") {
+    document.getElementById("notifBanner").classList.remove("hidden");
+  }
+}
+
+async function requestNotifications() {
+  const perm = await Notification.requestPermission();
+  document.getElementById("notifBanner").classList.add("hidden");
+  if (perm === "granted") {
+    document.getElementById("notifBtn").classList.add("active");
+  }
+}
+
+function toggleNotifications() {
+  if (!("Notification" in window)) return alert("Przeglądarka nie obsługuje powiadomień.");
+  if (Notification.permission === "default") requestNotifications();
+  else if (Notification.permission === "granted") {
+    document.getElementById("notifBtn").classList.toggle("active");
+  }
+}
+
+function showBrowserNotif(sig) {
+  if (Notification.permission !== "granted") return;
+  const icons = { cross_up: "🟢", cross_down: "🔴", bull_fading: "🟡", bear_fading: "🔵" };
+  const icon = icons[sig.type] || "⚡";
+  const label = LABELS[sig.type] || sig.type;
+  new Notification(`${icon} ${sig.symbol} — ${label}`, {
+    body: `alt: ${fmt(sig.alt_chg)}%  btc: ${fmt(sig.btc_chg)}%  rel: ${fmt(sig.rel)}`,
+    tag:  sig.symbol,
+  });
+}
+
+// ─── Start ────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
