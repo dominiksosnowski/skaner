@@ -1,69 +1,53 @@
 /**
- * Bybit ALT vs BTC Divergence Scanner
+ * OKX Linear Swaps — ALT vs BTC Divergence Scanner
  * Netlify Scheduled Function — odpala co 1h
- * 
- * Env vars (ustaw w Netlify → Site Settings → Environment Variables):
+ *
+ * Env vars (Netlify → Site Settings → Environment Variables):
  *   SUPABASE_URL         — URL projektu Supabase
- *   SUPABASE_SERVICE_KEY — service_role key (nie anon!) dla zapisu
- *   BTC_SYMBOL           — domyślnie BTCUSDT
+ *   SUPABASE_SERVICE_KEY — service_role key dla zapisu
  */
 
-// ─── Konfiguracja ────────────────────────────────────────────
 const CONFIG = {
-  interval:       "60",   // timeframe świec Bybit (60 = H1)
-  len:            20,     // okres porównania %
-  decayLen:       3,      // okno decay
-  minVolume24h:   1_000_000, // min wolumen USDT 24h
-  topN:           40,     // ile par skanować
-  btcSymbol:      process.env.BTC_SYMBOL || "BTCUSDT",
-  supabaseUrl:    process.env.SUPABASE_URL,
-  supabaseKey:    process.env.SUPABASE_SERVICE_KEY,
+  interval:     "1H",       // OKX bar: 1m 3m 5m 15m 30m 1H 4H 1D
+  len:          20,         // okres porównania %
+  decayLen:     3,          // okno decay
+  minVol24h:    1_000_000,  // min wolumen 24h USDT
+  topN:         40,         // ile par skanować
+  btcSymbol:    "BTC-USDT-SWAP",
+  supabaseUrl:  process.env.SUPABASE_URL,
+  supabaseKey:  process.env.SUPABASE_SERVICE_KEY,
 };
 
-const BYBIT = "https://api.bytick.com";
+const OKX = "https://www.okx.com";
 
-// ─── Bybit helpers ───────────────────────────────────────────
+// ─── OKX helpers ─────────────────────────────────────────────
 
-async function fetchJson(url, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${url}?${qs}`);
+async function fetchJson(url) {
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return res.json();
 }
 
-async function getAllPairs() {
-  const data = await fetchJson(`${BYBIT}/v5/market/instruments-info`, {
-    category: "linear",
-    limit: 1000,
-  });
-  return data.result.list
-    .filter(i => i.quoteCoin === "USDT" && i.status === "Trading")
-    .map(i => i.symbol);
+async function getAllSwaps() {
+  // Pobiera wszystkie pary USDT-margined perpetual swaps
+  const data = await fetchJson(`${OKX}/api/v5/market/tickers?instType=SWAP`);
+  return data.data
+    .filter(i => i.instId.endsWith("-USDT-SWAP"))
+    .map(i => ({
+      symbol:   i.instId,
+      vol24h:   parseFloat(i.volCcy24h || 0), // wolumen w kwocie quote (USDT)
+    }));
 }
 
-async function getTickers() {
-  const data = await fetchJson(`${BYBIT}/v5/market/tickers`, {
-    category: "linear",
-  });
-  const map = {};
-  for (const item of data.result.list) {
-    map[item.symbol] = parseFloat(item.turnover24h || 0);
-  }
-  return map;
-}
-
-async function getKlines(symbol, interval, limit) {
+async function getKlines(instId, bar, limit) {
+  // OKX zwraca od najnowszej — odwracamy
+  // Format świecy: [ts, open, high, low, close, vol, volCcy, volCcyQuote, confirm]
   try {
-    const data = await fetchJson(`${BYBIT}/v5/market/kline`, {
-      category: "linear",
-      symbol,
-      interval,
-      limit,
-    });
-    // Bybit zwraca od najnowszej — odwracamy
-    return data.result.list
-      .reverse()
-      .map(c => parseFloat(c[4])); // close
+    const data = await fetchJson(
+      `${OKX}/api/v5/market/history-candles?instId=${instId}&bar=${bar}&limit=${limit}`
+    );
+    if (!data.data?.length) return [];
+    return data.data.reverse().map(c => parseFloat(c[4])); // close
   } catch {
     return [];
   }
@@ -77,7 +61,7 @@ function computeSignals(altCloses, btcCloses, cfg) {
   if (altCloses.length < needed || btcCloses.length < needed) return null;
 
   const chg = (arr, i, L) => {
-    const idx = arr.length + i; // i jest ujemne
+    const idx = arr.length + i;
     if (idx - L < 0) return null;
     return (arr[idx] - arr[idx - L]) / arr[idx - L] * 100;
   };
@@ -89,7 +73,7 @@ function computeSignals(altCloses, btcCloses, cfg) {
   const altChgD    = chg(altCloses, -1 - decayLen, len);
   const btcChgD    = chg(btcCloses, -1 - decayLen, len);
 
-  if ([altChg, btcChg, altChgPrev, btcChgPrev, altChgD, btcChgD].includes(null)) return null;
+  if ([altChg, btcChg, altChgPrev, btcChgPrev, altChgD, btcChgD].some(v => v === null)) return null;
 
   const rel      = altChg - btcChg;
   const relPrevD = altChgD - btcChgD;
@@ -97,9 +81,8 @@ function computeSignals(altCloses, btcCloses, cfg) {
 
   const bullFading = rel > 0 && decay < 0;
   const bearFading = rel < 0 && decay > 0;
-
-  const crossUp   = (altChg > btcChg) && (altChgPrev <= btcChgPrev) && altChg > 0;
-  const crossDown = (altChg < btcChg) && (altChgPrev >= btcChgPrev) && altChg < 0;
+  const crossUp    = (altChg > btcChg) && (altChgPrev <= btcChgPrev) && altChg > 0;
+  const crossDown  = (altChg < btcChg) && (altChgPrev >= btcChgPrev) && altChg < 0;
 
   return { altChg, btcChg, rel, decay, bullFading, bearFading, crossUp, crossDown };
 }
@@ -122,28 +105,25 @@ async function supabaseFetch(path, method = "GET", body = null) {
 }
 
 async function loadState(symbols) {
-  // Pobierz stan dla wszystkich par w jednym zapytaniu
-  const symbolList = symbols.map(s => `"${s}"`).join(",");
-  const rows = await supabaseFetch(
-    `scanner_state?symbol=in.(${symbolList})`
-  );
+  const list = symbols.map(s => `"${s}"`).join(",");
+  const rows = await supabaseFetch(`scanner_state?symbol=in.(${list})`);
   const map = {};
-  for (const row of rows) map[row.symbol] = row;
+  for (const row of (rows || [])) map[row.symbol] = row;
   return map;
 }
 
-async function saveState(symbol, data) {
+async function upsertState(symbol, data) {
   await supabaseFetch(
-    `scanner_state?symbol=eq.${symbol}`,
+    `scanner_state?symbol=eq.${encodeURIComponent(symbol)}`,
     "DELETE"
   );
   await supabaseFetch("scanner_state", "POST", {
     symbol,
-    rel:          data.rel,
-    bull_fading:  data.bullFading,
-    bear_fading:  data.bearFading,
-    cross_state:  data.crossState,
-    updated_at:   new Date().toISOString(),
+    rel:         data.rel,
+    bull_fading: data.bullFading,
+    bear_fading: data.bearFading,
+    cross_state: data.crossState,
+    updated_at:  new Date().toISOString(),
   });
 }
 
@@ -155,7 +135,8 @@ async function saveSignals(signals) {
 // ─── Główna logika ───────────────────────────────────────────
 
 export default async function handler() {
-  console.log(`[${new Date().toISOString()}] Scan start`);
+  const ts = new Date().toISOString();
+  console.log(`[${ts}] OKX scan start`);
 
   if (!CONFIG.supabaseUrl || !CONFIG.supabaseKey) {
     console.error("Brak SUPABASE_URL lub SUPABASE_SERVICE_KEY");
@@ -164,33 +145,29 @@ export default async function handler() {
 
   const needed = CONFIG.len + CONFIG.decayLen + 5;
 
-  // 1. Lista par + filtr wolumenu
-  const [allPairs, tickers] = await Promise.all([
-    getAllPairs(),
-    getTickers(),
-  ]);
+  // 1. Pobierz listę swapów + filtr wolumenu
+  const allSwaps = await getAllSwaps();
+  const filtered = allSwaps
+    .filter(s => s.symbol !== CONFIG.btcSymbol && s.vol24h >= CONFIG.minVol24h)
+    .sort((a, b) => b.vol24h - a.vol24h)
+    .slice(0, CONFIG.topN)
+    .map(s => s.symbol);
 
-  const filtered = allPairs
-    .filter(s => s !== CONFIG.btcSymbol && tickers[s] >= CONFIG.minVolume24h)
-    .sort((a, b) => (tickers[b] || 0) - (tickers[a] || 0))
-    .slice(0, CONFIG.topN);
+  console.log(`Pary: ${filtered.length}`);
 
-  console.log(`Pary do skanowania: ${filtered.length}`);
-
-  // 2. BTC świece — pobierz raz
+  // 2. BTC świece
   const btcCloses = await getKlines(CONFIG.btcSymbol, CONFIG.interval, needed + 5);
   if (!btcCloses.length) {
     console.error("Brak danych BTC");
     return;
   }
 
-  // 3. Załaduj poprzedni stan z Supabase
+  // 3. Poprzedni stan z Supabase
   const prevState = await loadState(filtered);
-
-  // 4. Skanuj pary — batch po 8 żeby nie przekroczyć limitu Bybit
   const newSignals = [];
   const stateUpdates = [];
 
+  // 4. Skanuj — batch po 8
   const batchSize = 8;
   for (let i = 0; i < filtered.length; i += batchSize) {
     const batch = filtered.slice(i, i + batchSize);
@@ -202,13 +179,12 @@ export default async function handler() {
       const vals = computeSignals(altCloses, btcCloses, CONFIG);
       if (!vals) return;
 
-      const prev = prevState[sym] || {};
-      const signals = [];
+      const prev     = prevState[sym] || {};
+      const prevCross = prev.cross_state || null;
+      let newCross    = prevCross;
+      const signals   = [];
 
       // Crossover
-      const prevCross = prev.cross_state || null;
-      let newCross = prevCross;
-
       if (vals.crossUp && prevCross !== "up") {
         signals.push("cross_up");
         newCross = "up";
@@ -219,25 +195,23 @@ export default async function handler() {
         newCross = null;
       }
 
-      // Decay — tylko przy zmianie stanu
+      // Decay
       if (vals.bullFading && !prev.bull_fading) signals.push("bull_fading");
       if (vals.bearFading && !prev.bear_fading) signals.push("bear_fading");
 
-      // Zapisz sygnały
       for (const type of signals) {
         newSignals.push({
-          symbol:   sym,
+          symbol:  sym,
           type,
-          alt_chg:  parseFloat(vals.altChg.toFixed(4)),
-          btc_chg:  parseFloat(vals.btcChg.toFixed(4)),
-          rel:      parseFloat(vals.rel.toFixed(4)),
-          decay:    parseFloat(vals.decay.toFixed(4)),
+          alt_chg: parseFloat(vals.altChg.toFixed(4)),
+          btc_chg: parseFloat(vals.btcChg.toFixed(4)),
+          rel:     parseFloat(vals.rel.toFixed(4)),
+          decay:   parseFloat(vals.decay.toFixed(4)),
         });
         console.log(`  → ${sym} ${type}`);
       }
 
-      // Zaktualizuj stan
-      stateUpdates.push(saveState(sym, {
+      stateUpdates.push(upsertState(sym, {
         rel:        vals.rel,
         bullFading: vals.bullFading,
         bearFading: vals.bearFading,
@@ -245,21 +219,15 @@ export default async function handler() {
       }));
     }));
 
-    // Krótka przerwa między batchami
     if (i + batchSize < filtered.length) {
       await new Promise(r => setTimeout(r, 300));
     }
   }
 
-  // 5. Zapisz sygnały i stany do Supabase
-  await Promise.all([
-    saveSignals(newSignals),
-    ...stateUpdates,
-  ]);
-
+  await Promise.all([saveSignals(newSignals), ...stateUpdates]);
   console.log(`Scan done. Sygnały: ${newSignals.length}`);
 }
 
 export const config = {
-  schedule: "0 * * * *", // co godzinę, pełna godzina
+  schedule: "0 * * * *",
 };
