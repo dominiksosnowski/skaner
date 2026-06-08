@@ -49,10 +49,15 @@
   .filter-btn.f-bull_fading.active { border-color: var(--yellow); color: var(--yellow); }
   .filter-btn.f-bear_fading.active { border-color: var(--cyan);   color: var(--cyan); }
 
+
+  /* ── Sort ── */
+  .sort-controls { padding: 10px 16px; display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); }
+  .sort-btn { flex-shrink: 0; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; transition: all .15s; }
+  .sort-btn.active { color: var(--purple); border-color: var(--purple); background: #1e1a36; }
+
   /* ── Signal cards ── */
   .signals { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
-  .signal { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); border-left-width: 3px; animation: fadeIn .3s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  .signal { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); border-left-width: 3px; }
   .signal.cross_up    { border-left-color: var(--green); }
   .signal.cross_down  { border-left-color: var(--red); }
   .signal.bull_fading { border-left-color: var(--yellow); }
@@ -69,6 +74,32 @@
   .sig-values { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
   .sig-values code { color: var(--text); font-family: 'SF Mono', monospace; }
   .sig-time { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .sig-comment {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(148, 163, 184, .12);
+    font-size: 12px;
+    color: var(--text);
+    opacity: .88;
+    line-height: 1.35;
+  }
+  .sig-comment strong { font-weight: 700; }
+
+  /* ── Guide ── */
+  .guide {
+    margin: 10px 16px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .guide-title { color: var(--text); font-weight: 700; margin-bottom: 6px; }
+  .guide code { color: var(--text); font-family: 'SF Mono', monospace; }
+  .guide-row { margin-top: 3px; }
 
   /* ── Empty ── */
   .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
@@ -128,6 +159,23 @@
   <button class="filter-btn f-bear_fading" data-filter="bear_fading" onclick="setFilter('bear_fading', this)">🔵 Zanik niedźwiedziej</button>
 </div>
 
+
+<div class="sort-controls">
+  <button class="sort-btn active" data-sort="time" onclick="setSort('time', this)">🕒 Najnowsze</button>
+  <button class="sort-btn" data-sort="rel_desc" onclick="setSort('rel_desc', this)">rel ↓</button>
+  <button class="sort-btn" data-sort="rel_asc" onclick="setSort('rel_asc', this)">rel ↑</button>
+  <button class="sort-btn" data-sort="decay_desc" onclick="setSort('decay_desc', this)">decay ↓</button>
+  <button class="sort-btn" data-sort="decay_asc" onclick="setSort('decay_asc', this)">decay ↑</button>
+</div>
+
+<div class="guide">
+  <div class="guide-title">Jak czytać sygnały?</div>
+  <div class="guide-row"><code>alt%</code> — zmiana altcoina w badanym okresie.</div>
+  <div class="guide-row"><code>btc%</code> — zmiana BTC w tym samym okresie.</div>
+  <div class="guide-row"><code>rel</code> — różnica <code>alt% - btc%</code>. Dodatnie = alt mocniejszy od BTC, ujemne = alt słabszy.</div>
+  <div class="guide-row"><code>decay</code> — zmiana siły relatywnej względem wcześniejszych świec. Dodatnie = relatywna sytuacja alta poprawia się, ujemne = pogarsza się.</div>
+</div>
+
 <div id="app">
   <div class="loading"><div class="spinner"></div>Ładowanie sygnałów...</div>
 </div>
@@ -148,6 +196,7 @@ const LABELS = {
 // ─── Stan ─────────────────────────────────────────────────────
 let signals    = [];
 let filter     = "all";
+let sortMode   = "time";
 let supabase   = null;
 let realtimeSub = null;
 
@@ -156,6 +205,7 @@ async function init() {
   registerSW();
   checkNotifBanner();
   await loadSignals();
+  scheduleHourlyRefresh();
   subscribeRealtime();
 }
 
@@ -167,8 +217,24 @@ function registerSW() {
 }
 
 // ─── Supabase REST ────────────────────────────────────────────
-async function fetchSignals(limit = 100) {
-  const url = `${SUPABASE_URL}/rest/v1/signals?order=created_at.desc&limit=${limit}`;
+const SIGNAL_WINDOW_HOURS = 4;
+
+function getSinceIso(hours = SIGNAL_WINDOW_HOURS) {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
+function filterRecentSignals(list) {
+  const since = Date.now() - SIGNAL_WINDOW_HOURS * 60 * 60 * 1000;
+  return (list || []).filter(s => new Date(s.created_at).getTime() >= since);
+}
+
+async function fetchSignals() {
+  const since = getSinceIso();
+  const url =
+    `${SUPABASE_URL}/rest/v1/signals` +
+    `?created_at=gte.${encodeURIComponent(since)}` +
+    `&order=created_at.desc`;
+
   const res = await fetch(url, {
     headers: {
       "apikey":        SUPABASE_ANON,
@@ -195,13 +261,22 @@ async function loadSignals() {
   document.getElementById("refreshBtn").textContent = "↻";
 }
 
+function scheduleHourlyRefresh() {
+  const now = new Date();
+  const nextHour = new Date(now);
+  nextHour.setHours(now.getHours() + 1, 0, 5, 0); // pełna godzina + 5s
+
+  const delay = nextHour.getTime() - now.getTime();
+
+  setTimeout(async () => {
+    await loadSignals();
+    scheduleHourlyRefresh();
+  }, delay);
+}
+
 // ─── Realtime (Supabase WebSocket) ────────────────────────────
 function subscribeRealtime() {
-  // Używamy natywnego EventSource przez Supabase Realtime REST
-  // Prosta implementacja przez polling co 60s jako fallback
-  setInterval(loadSignals, 60_000);
-
-  // Supabase Realtime przez WebSocket
+  // Realtime przez WebSocket; regularne odświeżanie robi scheduleHourlyRefresh() o pełnych godzinach.
   try {
     const wsUrl = SUPABASE_URL
       .replace("https://", "wss://")
@@ -224,7 +299,7 @@ function subscribeRealtime() {
       const msg = JSON.parse(e.data);
       if (msg.event === "INSERT" && msg.payload?.record) {
         const rec = msg.payload.record;
-        signals = [rec, ...signals].slice(0, 100);
+        signals = filterRecentSignals([rec, ...signals]);
         updateStats();
         render();
         showBrowserNotif(rec);
@@ -245,14 +320,37 @@ function subscribeRealtime() {
 function render() {
   const app = document.getElementById("app");
   const filtered = filter === "all" ? signals : signals.filter(s => s.type === filter);
+  const sorted = getSortedSignals(filtered);
 
-  if (!filtered.length) {
+  if (!sorted.length) {
     app.innerHTML = `<div class="empty"><div class="empty-icon">📡</div>
-      ${filter === "all" ? "Brak sygnałów. Następny skan za ~1h." : "Brak sygnałów tego typu."}</div>`;
+      ${filter === "all" ? "Brak sygnałów z ostatnich 4 godzin." : "Brak sygnałów tego typu."}</div>`;
     return;
   }
 
-  app.innerHTML = `<div class="signals">${filtered.map(renderSignal).join("")}</div>`;
+  app.innerHTML = `<div class="signals">${sorted.map(renderSignal).join("")}</div>`;
+}
+
+function getSortedSignals(arr) {
+  const out = [...arr];
+  const num = v => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  switch (sortMode) {
+    case "rel_desc":
+      return out.sort((a, b) => num(b.rel) - num(a.rel));
+    case "rel_asc":
+      return out.sort((a, b) => num(a.rel) - num(b.rel));
+    case "decay_desc":
+      return out.sort((a, b) => num(b.decay) - num(a.decay));
+    case "decay_asc":
+      return out.sort((a, b) => num(a.decay) - num(b.decay));
+    case "time":
+    default:
+      return out.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
 }
 
 function renderSignal(s) {
@@ -271,6 +369,7 @@ function renderSignal(s) {
         <span>rel: <code>${fmt(s.rel)}</code></span>
         <span>decay: <code>${fmt(s.decay)}</code></span>
       </div>
+      <div class="sig-comment">${explainSignal(s)}</div>
       <div class="sig-time">${timeStr}</div>
     </div>`;
 }
@@ -278,6 +377,41 @@ function renderSignal(s) {
 function fmt(v) {
   if (v == null) return "—";
   return (v >= 0 ? "+" : "") + Number(v).toFixed(2);
+}
+
+function explainSignal(s) {
+  const rel = Number(s.rel);
+  const decay = Number(s.decay);
+
+  if (!Number.isFinite(rel) || !Number.isFinite(decay)) {
+    return "Brak pełnych danych do interpretacji siły względem BTC.";
+  }
+
+  if (rel > 0 && decay > 0) {
+    return "<strong>Przewaga narasta:</strong> altcoin jest mocniejszy od BTC i zwiększa swoją siłę relatywną.";
+  }
+
+  if (rel > 0 && decay < 0) {
+    return "<strong>Przewaga słabnie:</strong> altcoin nadal jest mocniejszy od BTC, ale momentum przewagi zaczyna zanikać.";
+  }
+
+  if (rel < 0 && decay < 0) {
+    return "<strong>Słabość narasta:</strong> altcoin jest słabszy od BTC i relatywnie traci coraz mocniej.";
+  }
+
+  if (rel < 0 && decay > 0) {
+    return "<strong>Słabość zanika:</strong> altcoin nadal jest słabszy od BTC, ale zaczyna odrabiać względem BTC.";
+  }
+
+  if (rel > 0 && decay === 0) {
+    return "<strong>Stabilna przewaga:</strong> altcoin jest mocniejszy od BTC, ale przewaga nie zmienia się wyraźnie.";
+  }
+
+  if (rel < 0 && decay === 0) {
+    return "<strong>Stabilna słabość:</strong> altcoin jest słabszy od BTC, bez wyraźnej zmiany tempa.";
+  }
+
+  return "<strong>Neutralnie:</strong> altcoin porusza się bardzo podobnie do BTC.";
 }
 
 // ─── Stats ────────────────────────────────────────────────────
@@ -299,6 +433,13 @@ function setConnected(ok) {
 function setFilter(f, el) {
   filter = f;
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  render();
+}
+
+function setSort(mode, el) {
+  sortMode = mode;
+  document.querySelectorAll(".sort-btn").forEach(b => b.classList.remove("active"));
   el.classList.add("active");
   render();
 }
