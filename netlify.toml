@@ -1,12 +1,6 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
- 
+
 [functions]
   node_bundler = "esbuild"
- 
-# Scheduled function — co godzinę
-# (schedule jest też w pliku scan.mjs jako export config)
-[[plugins]]
-  package = "@netlify/plugin-scheduled-functions"
- 
