@@ -40,6 +40,58 @@
   .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
   .stat-value { font-size: 16px; font-weight: 700; }
 
+  /* ── Last scan summary ── */
+  .scan-summary {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .scan-summary-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 8px;
+  }
+  .scan-counts {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .scan-count {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    user-select: none;
+  }
+  .scan-count:hover { border-color: var(--muted); }
+  .scan-count.active-filter { background: #1a1a2e; }
+  .scan-count .sc-num {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .scan-count .sc-label { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .scan-count.t-cross_up    { border-left: 2px solid var(--green); }
+  .scan-count.t-cross_down  { border-left: 2px solid var(--red); }
+  .scan-count.t-bull_fading { border-left: 2px solid var(--yellow); }
+  .scan-count.t-bear_fading { border-left: 2px solid var(--cyan); }
+  .scan-count.t-cross_up    .sc-num { color: var(--green); }
+  .scan-count.t-cross_down  .sc-num { color: var(--red); }
+  .scan-count.t-bull_fading .sc-num { color: var(--yellow); }
+  .scan-count.t-bear_fading .sc-num { color: var(--cyan); }
+  .scan-count.t-cross_up.active-filter    { background: #0d2b1a; border-color: var(--green); }
+  .scan-count.t-cross_down.active-filter  { background: #2b0d0d; border-color: var(--red); }
+  .scan-count.t-bull_fading.active-filter { background: #2b1e05; border-color: var(--yellow); }
+  .scan-count.t-bear_fading.active-filter { background: #051e2b; border-color: var(--cyan); }
+
   /* ── Filters ── */
   .filters { padding: 10px 16px; display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); }
   .filter-btn { flex-shrink: 0; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; transition: all .15s; }
@@ -48,7 +100,6 @@
   .filter-btn.f-cross_down.active  { border-color: var(--red);    color: var(--red); }
   .filter-btn.f-bull_fading.active { border-color: var(--yellow); color: var(--yellow); }
   .filter-btn.f-bear_fading.active { border-color: var(--cyan);   color: var(--cyan); }
-
 
   /* ── Sort ── */
   .sort-controls { padding: 10px 16px; display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); }
@@ -78,7 +129,7 @@
   .sig-comment {
     margin-top: 7px;
     padding-top: 7px;
-    border-top: 1px solid rgba(148, 163, 184, .12);
+    border-top: 1px solid rgba(148,163,184,.12);
     font-size: 12px;
     color: var(--text);
     opacity: .88;
@@ -87,16 +138,7 @@
   .sig-comment strong { font-weight: 700; }
 
   /* ── Guide ── */
-  .guide {
-    margin: 10px 16px 0;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
-  }
+  .guide { margin: 10px 16px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1.45; }
   .guide-title { color: var(--text); font-weight: 700; margin-bottom: 6px; }
   .guide code { color: var(--text); font-family: 'SF Mono', monospace; }
   .guide-row { margin-top: 3px; }
@@ -142,12 +184,35 @@
     <div class="stat-value" id="s-total">—</div>
   </div>
   <div class="stat">
-    <div class="stat-label">Ostatni</div>
+    <div class="stat-label">Ostatni skan</div>
     <div class="stat-value" id="s-last" style="font-size:12px;margin-top:3px">—</div>
   </div>
   <div class="stat">
     <div class="stat-label">Status</div>
     <div class="stat-value" style="font-size:13px"><span class="conn-dot" id="connDot"></span><span id="connStatus">—</span></div>
+  </div>
+</div>
+
+<!-- Last scan summary -->
+<div class="scan-summary">
+  <div class="scan-summary-label">Ostatnie odświeżenie — kliknij żeby filtrować</div>
+  <div class="scan-counts">
+    <div class="scan-count t-cross_up" onclick="toggleSummaryFilter('cross_up', this)">
+      <span class="sc-num" id="cnt-cross_up">—</span>
+      <span class="sc-label">Crossover ▲</span>
+    </div>
+    <div class="scan-count t-cross_down" onclick="toggleSummaryFilter('cross_down', this)">
+      <span class="sc-num" id="cnt-cross_down">—</span>
+      <span class="sc-label">Crossover ▼</span>
+    </div>
+    <div class="scan-count t-bull_fading" onclick="toggleSummaryFilter('bull_fading', this)">
+      <span class="sc-num" id="cnt-bull_fading">—</span>
+      <span class="sc-label">Zanik byczej</span>
+    </div>
+    <div class="scan-count t-bear_fading" onclick="toggleSummaryFilter('bear_fading', this)">
+      <span class="sc-num" id="cnt-bear_fading">—</span>
+      <span class="sc-label">Zanik niedźwiedziej</span>
+    </div>
   </div>
 </div>
 
@@ -158,7 +223,6 @@
   <button class="filter-btn f-bull_fading" data-filter="bull_fading" onclick="setFilter('bull_fading', this)">🟡 Zanik byczej</button>
   <button class="filter-btn f-bear_fading" data-filter="bear_fading" onclick="setFilter('bear_fading', this)">🔵 Zanik niedźwiedziej</button>
 </div>
-
 
 <div class="sort-controls">
   <button class="sort-btn active" data-sort="time" onclick="setSort('time', this)">🕒 Najnowsze</button>
@@ -181,10 +245,8 @@
 </div>
 
 <script>
-// ─── Konfiguracja ─────────────────────────────────────────────
-// ZMIEŃ te dwie wartości na swoje dane z Supabase
-const SUPABASE_URL  = "https://zboawtxivkcieimbndhd.supabase.co";       // np. https://xyz.supabase.co
-const SUPABASE_ANON = "sb_publishable_u9zajjGvLqkuNZptl90zEA_dkgu8Ll4";  // anon/public key
+const SUPABASE_URL  = "https://zboawtxivkcieimbndhd.supabase.co";
+const SUPABASE_ANON = "sb_publishable_u9zajjGvLqkuNZptl90zEA_dkgu8Ll4";
 
 const LABELS = {
   cross_up:    "CROSSOVER ▲",
@@ -193,12 +255,11 @@ const LABELS = {
   bear_fading: "ZANIK NIEDŹWIEDZIEJ",
 };
 
-// ─── Stan ─────────────────────────────────────────────────────
-let signals    = [];
-let filter     = "all";
-let sortMode   = "time";
-let supabase   = null;
-let realtimeSub = null;
+const SIGNAL_WINDOW_HOURS = 4;
+
+let signals  = [];
+let filter   = "all";
+let sortMode = "time";
 
 // ─── Init ─────────────────────────────────────────────────────
 async function init() {
@@ -209,39 +270,23 @@ async function init() {
   subscribeRealtime();
 }
 
-// ─── Service Worker ───────────────────────────────────────────
 function registerSW() {
-  if ("serviceWorker" in navigator) {
+  if ("serviceWorker" in navigator)
     navigator.serviceWorker.register("/sw.js").catch(console.error);
-  }
 }
 
-// ─── Supabase REST ────────────────────────────────────────────
-const SIGNAL_WINDOW_HOURS = 4;
-
+// ─── Fetch ────────────────────────────────────────────────────
 function getSinceIso(hours = SIGNAL_WINDOW_HOURS) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
-function filterRecentSignals(list) {
-  const since = Date.now() - SIGNAL_WINDOW_HOURS * 60 * 60 * 1000;
-  return (list || []).filter(s => new Date(s.created_at).getTime() >= since);
-}
-
 async function fetchSignals() {
   const since = getSinceIso();
-  const url =
-    `${SUPABASE_URL}/rest/v1/signals` +
-    `?created_at=gte.${encodeURIComponent(since)}` +
-    `&order=created_at.desc`;
-
+  const url = `${SUPABASE_URL}/rest/v1/signals?created_at=gte.${encodeURIComponent(since)}&order=created_at.desc`;
   const res = await fetch(url, {
-    headers: {
-      "apikey":        SUPABASE_ANON,
-      "Authorization": `Bearer ${SUPABASE_ANON}`,
-    },
+    headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` },
   });
-  if (!res.ok) throw new Error(`Supabase error ${res.status}`);
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
 }
 
@@ -250,113 +295,116 @@ async function loadSignals() {
   try {
     signals = await fetchSignals();
     updateStats();
+    updateSummary();
     render();
     setConnected(true);
   } catch (e) {
     console.error(e);
     setConnected(false);
     document.getElementById("app").innerHTML =
-      `<div class="empty"><div class="empty-icon">⚠️</div>Błąd połączenia z Supabase.<br>Sprawdź klucze w index.html.</div>`;
+      `<div class="empty"><div class="empty-icon">⚠️</div>Błąd połączenia z Supabase.</div>`;
   }
   document.getElementById("refreshBtn").textContent = "↻";
 }
 
 function scheduleHourlyRefresh() {
   const now = new Date();
-  const nextHour = new Date(now);
-  nextHour.setHours(now.getHours() + 1, 0, 5, 0); // pełna godzina + 5s
-
-  const delay = nextHour.getTime() - now.getTime();
-
-  setTimeout(async () => {
-    await loadSignals();
-    scheduleHourlyRefresh();
-  }, delay);
+  const next = new Date(now);
+  next.setHours(now.getHours() + 1, 0, 10, 0);
+  setTimeout(async () => { await loadSignals(); scheduleHourlyRefresh(); }, next - now);
 }
 
-// ─── Realtime (Supabase WebSocket) ────────────────────────────
-function subscribeRealtime() {
-  // Realtime przez WebSocket; regularne odświeżanie robi scheduleHourlyRefresh() o pełnych godzinach.
-  try {
-    const wsUrl = SUPABASE_URL
-      .replace("https://", "wss://")
-      .replace("http://", "ws://");
-    const ws = new WebSocket(
-      `${wsUrl}/realtime/v1/websocket?apikey=${SUPABASE_ANON}&vsn=1.0.0`
-    );
+// ─── Last scan summary ────────────────────────────────────────
+function getLastScanSignals() {
+  // Sygnały z ostatniej godziny (jeden skan = H1)
+  const since = Date.now() - 70 * 60 * 1000; // 70 min margines
+  return signals.filter(s => new Date(s.created_at).getTime() >= since);
+}
 
+function updateSummary() {
+  const lastScan = getLastScanSignals();
+  const counts = { cross_up: 0, cross_down: 0, bull_fading: 0, bear_fading: 0 };
+  for (const s of lastScan) {
+    if (counts[s.type] !== undefined) counts[s.type]++;
+  }
+  for (const [type, n] of Object.entries(counts)) {
+    const el = document.getElementById(`cnt-${type}`);
+    if (el) el.textContent = n;
+  }
+}
+
+function toggleSummaryFilter(type, el) {
+  // Kliknięcie na kafelek summary = filtruje listę sygnałów
+  const newFilter = filter === type ? "all" : type;
+  filter = newFilter;
+
+  // Sync z filter buttons
+  document.querySelectorAll(".filter-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.filter === filter);
+  });
+  // Podświetl aktywny kafelek
+  document.querySelectorAll(".scan-count").forEach(c => c.classList.remove("active-filter"));
+  if (filter !== "all") el.classList.add("active-filter");
+
+  render();
+}
+
+// ─── Realtime ─────────────────────────────────────────────────
+function subscribeRealtime() {
+  try {
+    const wsUrl = SUPABASE_URL.replace("https://", "wss://");
+    const ws = new WebSocket(`${wsUrl}/realtime/v1/websocket?apikey=${SUPABASE_ANON}&vsn=1.0.0`);
     ws.onopen = () => {
-      ws.send(JSON.stringify({
-        topic: "realtime:public:signals",
-        event: "phx_join",
-        payload: {},
-        ref: "1",
-      }));
+      ws.send(JSON.stringify({ topic: "realtime:public:signals", event: "phx_join", payload: {}, ref: "1" }));
       setConnected(true);
     };
-
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
       if (msg.event === "INSERT" && msg.payload?.record) {
         const rec = msg.payload.record;
-        signals = filterRecentSignals([rec, ...signals]);
+        const since = Date.now() - SIGNAL_WINDOW_HOURS * 3600 * 1000;
+        signals = [rec, ...signals].filter(s => new Date(s.created_at).getTime() >= since);
         updateStats();
+        updateSummary();
         render();
         showBrowserNotif(rec);
       }
     };
-
     ws.onerror = () => setConnected(false);
-    ws.onclose = () => {
-      setConnected(false);
-      setTimeout(subscribeRealtime, 5000); // reconnect
-    };
-  } catch (e) {
-    console.warn("Realtime WS failed, using polling");
-  }
+    ws.onclose = () => { setConnected(false); setTimeout(subscribeRealtime, 5000); };
+  } catch { console.warn("WS failed"); }
 }
 
 // ─── Render ───────────────────────────────────────────────────
 function render() {
   const app = document.getElementById("app");
   const filtered = filter === "all" ? signals : signals.filter(s => s.type === filter);
-  const sorted = getSortedSignals(filtered);
+  const sorted = getSorted(filtered);
 
   if (!sorted.length) {
     app.innerHTML = `<div class="empty"><div class="empty-icon">📡</div>
       ${filter === "all" ? "Brak sygnałów z ostatnich 4 godzin." : "Brak sygnałów tego typu."}</div>`;
     return;
   }
-
   app.innerHTML = `<div class="signals">${sorted.map(renderSignal).join("")}</div>`;
 }
 
-function getSortedSignals(arr) {
+function getSorted(arr) {
+  const n = v => Number.isFinite(+v) ? +v : 0;
   const out = [...arr];
-  const num = v => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-
   switch (sortMode) {
-    case "rel_desc":
-      return out.sort((a, b) => num(b.rel) - num(a.rel));
-    case "rel_asc":
-      return out.sort((a, b) => num(a.rel) - num(b.rel));
-    case "decay_desc":
-      return out.sort((a, b) => num(b.decay) - num(a.decay));
-    case "decay_asc":
-      return out.sort((a, b) => num(a.decay) - num(b.decay));
-    case "time":
-    default:
-      return out.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    case "rel_desc":   return out.sort((a,b) => n(b.rel)   - n(a.rel));
+    case "rel_asc":    return out.sort((a,b) => n(a.rel)   - n(b.rel));
+    case "decay_desc": return out.sort((a,b) => n(b.decay) - n(a.decay));
+    case "decay_asc":  return out.sort((a,b) => n(a.decay) - n(b.decay));
+    default:           return out.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   }
 }
 
 function renderSignal(s) {
   const label = LABELS[s.type] || s.type;
   const t = new Date(s.created_at);
-  const timeStr = t.toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const timeStr = t.toLocaleString("pl-PL", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
   return `
     <div class="signal ${s.type}">
       <div class="sig-top">
@@ -380,38 +428,13 @@ function fmt(v) {
 }
 
 function explainSignal(s) {
-  const rel = Number(s.rel);
-  const decay = Number(s.decay);
-
-  if (!Number.isFinite(rel) || !Number.isFinite(decay)) {
-    return "Brak pełnych danych do interpretacji siły względem BTC.";
-  }
-
-  if (rel > 0 && decay > 0) {
-    return "<strong>Przewaga narasta:</strong> altcoin jest mocniejszy od BTC i zwiększa swoją siłę relatywną.";
-  }
-
-  if (rel > 0 && decay < 0) {
-    return "<strong>Przewaga słabnie:</strong> altcoin nadal jest mocniejszy od BTC, ale momentum przewagi zaczyna zanikać.";
-  }
-
-  if (rel < 0 && decay < 0) {
-    return "<strong>Słabość narasta:</strong> altcoin jest słabszy od BTC i relatywnie traci coraz mocniej.";
-  }
-
-  if (rel < 0 && decay > 0) {
-    return "<strong>Słabość zanika:</strong> altcoin nadal jest słabszy od BTC, ale zaczyna odrabiać względem BTC.";
-  }
-
-  if (rel > 0 && decay === 0) {
-    return "<strong>Stabilna przewaga:</strong> altcoin jest mocniejszy od BTC, ale przewaga nie zmienia się wyraźnie.";
-  }
-
-  if (rel < 0 && decay === 0) {
-    return "<strong>Stabilna słabość:</strong> altcoin jest słabszy od BTC, bez wyraźnej zmiany tempa.";
-  }
-
-  return "<strong>Neutralnie:</strong> altcoin porusza się bardzo podobnie do BTC.";
+  const rel = +s.rel, decay = +s.decay;
+  if (!Number.isFinite(rel) || !Number.isFinite(decay)) return "Brak pełnych danych.";
+  if (rel > 0 && decay > 0) return "<strong>Przewaga narasta:</strong> alt mocniejszy od BTC i zwiększa siłę relatywną.";
+  if (rel > 0 && decay < 0) return "<strong>Przewaga słabnie:</strong> alt nadal mocniejszy od BTC, ale momentum zanika.";
+  if (rel < 0 && decay < 0) return "<strong>Słabość narasta:</strong> alt słabszy od BTC i relatywnie traci coraz mocniej.";
+  if (rel < 0 && decay > 0) return "<strong>Słabość zanika:</strong> alt nadal słabszy od BTC, ale zaczyna odrabiać.";
+  return "<strong>Neutralnie:</strong> alt porusza się podobnie do BTC.";
 }
 
 // ─── Stats ────────────────────────────────────────────────────
@@ -420,7 +443,7 @@ function updateStats() {
   if (signals.length) {
     const t = new Date(signals[0].created_at);
     document.getElementById("s-last").textContent =
-      t.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+      t.toLocaleTimeString("pl-PL", { hour:"2-digit", minute:"2-digit" });
   }
 }
 
@@ -429,56 +452,47 @@ function setConnected(ok) {
   document.getElementById("connStatus").textContent = ok ? "Live" : "Offline";
 }
 
-// ─── Filter ───────────────────────────────────────────────────
+// ─── Filter / Sort ────────────────────────────────────────────
 function setFilter(f, el) {
   filter = f;
-  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-  el.classList.add("active");
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === f));
+  document.querySelectorAll(".scan-count").forEach(c => c.classList.remove("active-filter"));
   render();
 }
 
 function setSort(mode, el) {
   sortMode = mode;
-  document.querySelectorAll(".sort-btn").forEach(b => b.classList.remove("active"));
-  el.classList.add("active");
+  document.querySelectorAll(".sort-btn").forEach(b => b.classList.toggle("active", b.dataset.sort === mode));
   render();
 }
 
 // ─── Powiadomienia ────────────────────────────────────────────
 function checkNotifBanner() {
-  if ("Notification" in window && Notification.permission === "default") {
+  if ("Notification" in window && Notification.permission === "default")
     document.getElementById("notifBanner").classList.remove("hidden");
-  }
 }
 
 async function requestNotifications() {
   const perm = await Notification.requestPermission();
   document.getElementById("notifBanner").classList.add("hidden");
-  if (perm === "granted") {
-    document.getElementById("notifBtn").classList.add("active");
-  }
+  if (perm === "granted") document.getElementById("notifBtn").classList.add("active");
 }
 
 function toggleNotifications() {
   if (!("Notification" in window)) return alert("Przeglądarka nie obsługuje powiadomień.");
   if (Notification.permission === "default") requestNotifications();
-  else if (Notification.permission === "granted") {
-    document.getElementById("notifBtn").classList.toggle("active");
-  }
+  else document.getElementById("notifBtn").classList.toggle("active");
 }
 
 function showBrowserNotif(sig) {
   if (Notification.permission !== "granted") return;
-  const icons = { cross_up: "🟢", cross_down: "🔴", bull_fading: "🟡", bear_fading: "🔵" };
-  const icon = icons[sig.type] || "⚡";
-  const label = LABELS[sig.type] || sig.type;
-  new Notification(`${icon} ${sig.symbol} — ${label}`, {
+  const icons = { cross_up:"🟢", cross_down:"🔴", bull_fading:"🟡", bear_fading:"🔵" };
+  new Notification(`${icons[sig.type]||"⚡"} ${sig.symbol} — ${LABELS[sig.type]||sig.type}`, {
     body: `alt: ${fmt(sig.alt_chg)}%  btc: ${fmt(sig.btc_chg)}%  rel: ${fmt(sig.rel)}`,
-    tag:  sig.symbol,
+    tag: sig.symbol,
   });
 }
 
-// ─── Start ────────────────────────────────────────────────────
 init();
 </script>
 </body>
